@@ -1,3 +1,7 @@
 __pycache__/
 *.pyc
 .DS_Store
+
+# Готовый фид НЕ коммитим в git (18 МБ/прогон раздует историю).
+# Он генерируется в CI и деплоится через Pages-артефакт (actions/deploy-pages).
+docs/feed.xml

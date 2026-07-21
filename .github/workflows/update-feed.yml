@@ -2,27 +2,32 @@ name: Update filtered feed
 
 on:
   schedule:
-    # Каждый час в :00 (UTC). Скачать → схлопнуть варианты → закоммитить.
-    - cron: '0 * * * *'
-  # Можно запустить вручную из вкладки Actions
+    # Каждые 6 часов (UTC). Фид ~18 МБ — деплоим через Pages-артефакт, БЕЗ коммита
+    # в git (иначе история пухнет на 18 МБ за прогон). Resale-кроссовкам 4×/день хватает.
+    - cron: '0 */6 * * *'
   workflow_dispatch:
-  # И при пуше — для проверки что workflow рабочий
   push:
     branches: [main]
     paths:
       - 'scripts/**'
       - '.github/workflows/**'
 
+# Права для deploy-pages (артефактный деплой, не коммит в ветку).
 permissions:
-  contents: write  # нужно чтобы actions мог коммитить обратно
+  contents: read
+  pages: write
+  id-token: write
 
 concurrency:
   group: update-feed
   cancel-in-progress: false
 
 jobs:
-  update:
+  build-and-deploy:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,17 +37,17 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Run filter script
+      - name: Build filtered feed (скачать 130 МБ → схлоп → docs/feed.xml ~18 МБ)
         run: python scripts/filter_feed.py
 
-      - name: Commit & push if feed changed
-        run: |
-          if git diff --quiet docs/feed.xml; then
-            echo "Фид без изменений — коммит не нужен."
-          else
-            git config user.name  "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add docs/feed.xml
-            git commit -m "Auto-update filtered feed [$(date -u +'%Y-%m-%d %H:%M UTC')]"
-            git push
-          fi
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact (папка docs с feed.xml)
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
